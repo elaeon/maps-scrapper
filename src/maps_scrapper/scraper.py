@@ -4,7 +4,8 @@ import os
 import re
 from urllib.parse import quote_plus
 
-from playwright.sync_api import Error as PlaywrightError, Page, sync_playwright
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import Page, sync_playwright
 
 from .extractor import NAME_XP, extract_place
 from .models import Place
@@ -174,7 +175,9 @@ def scrape_places(
                 log.info(f"Tile {tile_idx + 1}/{len(tiles)} | saved {total_saved}/{total}")
 
                 if tile_idx > 0:
-                    url = f"https://www.google.com/maps/search/{query_enc}/@{lat},{lng},{TILE_ZOOM}z"
+                    url = (
+                        f"https://www.google.com/maps/search/{query_enc}/@{lat},{lng},{TILE_ZOOM}z"
+                    )
                     page.goto(url, timeout=60000)
                     page.wait_for_timeout(2000)
                     try:
@@ -190,9 +193,7 @@ def scrape_places(
 
                 tile_places = _scrape_tile_places(page, new_urls, total - total_saved)
                 if tile_places:
-                    append_records(
-                        output_path, tile_places, format=fmt, append=file_initialized
-                    )
+                    append_records(output_path, tile_places, format=fmt, append=file_initialized)
                     file_initialized = True
                     total_saved += len(tile_places)
                     log.info(f"  Saved {len(tile_places)} places (total: {total_saved})")

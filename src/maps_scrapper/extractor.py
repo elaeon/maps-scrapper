@@ -1,15 +1,22 @@
 import re
 
-from playwright.sync_api import Error as PlaywrightError, Page
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import Page
 
 from .models import Place
 
 NAME_XP = '//div[@class="TIHn2 "]//h1[@class="DUwDvf lfPIob"]'
 ADDRESS_XP = '//button[@data-item-id="address"]//div[contains(@class, "fontBodyMedium")]'
 WEBSITE_XP = '//a[@data-item-id="authority"]//div[contains(@class, "fontBodyMedium")]'
-PHONE_XP = '//button[contains(@data-item-id, "phone:tel:")]//div[contains(@class, "fontBodyMedium")]'
-REVIEWS_COUNT_XP = '//div[@class="TIHn2 "]//div[@class="fontBodyMedium dmRWX"]//div//span//span//span[@aria-label]'
-REVIEWS_AVG_XP = '//div[@class="TIHn2 "]//div[@class="fontBodyMedium dmRWX"]//div//span[@aria-hidden]'
+PHONE_XP = (
+    '//button[contains(@data-item-id, "phone:tel:")]//div[contains(@class, "fontBodyMedium")]'
+)
+REVIEWS_COUNT_XP = (
+    '//div[@class="TIHn2 "]//div[@class="fontBodyMedium dmRWX"]//div//span//span//span[@aria-label]'
+)
+REVIEWS_AVG_XP = (
+    '//div[@class="TIHn2 "]//div[@class="fontBodyMedium dmRWX"]//div//span[@aria-hidden]'
+)
 PLACE_TYPE_XP = '//div[@class="LBgpqf"]//button[@class="DkEaL "]'
 INTRO_XP = '//div[@class="WeS02d fontBodyMedium"]//div[@class="PYvSYb "]'
 INFO_ROWS_XP = '//div[@class="LTs0Rc"]'
