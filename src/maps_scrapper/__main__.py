@@ -1,9 +1,10 @@
 import argparse
 import logging
+import sys
 
 from .scraper import scrape_places
 
-_MAX_RESULTS = 100
+MAX_RESULTS: int = 100
 
 
 def _parse_bbox(value: str) -> tuple[float, float, float, float]:
@@ -17,6 +18,7 @@ def _setup_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
+        stream=sys.stderr,
     )
 
 
@@ -27,10 +29,10 @@ def main() -> None:
         "-t",
         "--max-results",
         type=int,
-        default=_MAX_RESULTS,
-        help=f"Max results to collect (default {_MAX_RESULTS})",
+        default=MAX_RESULTS,
+        help=f"Max results to collect (default {MAX_RESULTS})",
     )
-    parser.add_argument("-o", "--output", help="Output file path (.csv or .jsonl)", required=True)
+    parser.add_argument("-o", "--output", help="Output file path (.csv or .jsonl)", required=False)
     parser.add_argument(
         "-c",
         "--concat",

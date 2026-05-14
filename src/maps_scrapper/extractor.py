@@ -11,12 +11,10 @@ WEBSITE_XP = '//a[@data-item-id="authority"]//div[contains(@class, "fontBodyMedi
 PHONE_XP = (
     '//button[contains(@data-item-id, "phone:tel:")]//div[contains(@class, "fontBodyMedium")]'
 )
-REVIEWS_COUNT_XP = (
-    '//div[@class="TIHn2 "]//div[@class="fontBodyMedium dmRWX"]//div//span//span//span[@aria-label]'
-)
-REVIEWS_AVG_XP = (
-    '//div[@class="TIHn2 "]//div[@class="fontBodyMedium dmRWX"]//div//span[@aria-hidden]'
-)
+# Combined span: inner_text like "4.3(226)" — present when the place has reviews
+REVIEWS_SPAN_XP = '//span[@class="ZkP5Je"]'
+# Fallback for average only — shown even for places with no reviews yet
+REVIEWS_AVG_FALLBACK_XP = '//div[@class="F7nice "]//span[@aria-hidden="true"]'
 PLACE_TYPE_XP = '//div[@class="LBgpqf"]//button[@class="DkEaL "]'
 INTRO_XP = '//div[@class="WeS02d fontBodyMedium"]//div[@class="PYvSYb "]'
 INFO_ROWS_XP = '//div[@class="LTs0Rc"]'
@@ -42,23 +40,26 @@ def _text(page: Page, xpath: str, timeout_ms: int = 1000) -> str:
         return ""
 
 
-def _parse_reviews_count(raw: str) -> int | None:
-    if not raw:
-        return None
-    cleaned = raw.replace("\xa0", "").replace("(", "").replace(")", "").replace(",", "")
-    try:
-        return int(cleaned)
-    except ValueError:
-        return None
+_REVIEWS_RE = re.compile(r"([\d.,]+)\(([\d,\xa0]+)\)")
 
 
-def _parse_reviews_avg(raw: str) -> float | None:
-    if not raw:
-        return None
-    try:
-        return float(raw.replace(" ", "").replace(",", "."))
-    except ValueError:
-        return None
+def _parse_reviews(page: Page) -> tuple[float | None, int | None]:
+    """Return (average, count) from the combined reviews span, with avg-only fallback."""
+    raw = _text(page, REVIEWS_SPAN_XP)
+    if raw:
+        m = _REVIEWS_RE.search(raw)
+        if m:
+            avg = float(m.group(1).replace(",", "."))
+            count = int(m.group(2).replace(",", "").replace("\xa0", ""))
+            return avg, count
+    # Fallback: avg only, no count (new or review-less places)
+    avg_raw = _text(page, REVIEWS_AVG_FALLBACK_XP)
+    if avg_raw:
+        try:
+            return float(avg_raw.replace(",", ".")), None
+        except ValueError:
+            pass
+    return None, None
 
 
 def _parse_opens_at(page: Page) -> str:
@@ -94,6 +95,7 @@ def _service_flags(page: Page) -> dict[str, str]:
 
 def extract_place(page: Page) -> Place:
     lat, lng = _parse_coords(page.url)
+    avg, count = _parse_reviews(page)
     place = Place(
         name=_text(page, NAME_XP),
         address=_text(page, ADDRESS_XP),
@@ -101,8 +103,8 @@ def extract_place(page: Page) -> Place:
         phone_number=_text(page, PHONE_XP),
         place_type=_text(page, PLACE_TYPE_XP),
         introduction=_text(page, INTRO_XP) or "None Found",
-        reviews_count=_parse_reviews_count(_text(page, REVIEWS_COUNT_XP)),
-        reviews_average=_parse_reviews_avg(_text(page, REVIEWS_AVG_XP)),
+        reviews_average=avg,
+        reviews_count=count,
         opens_at=_parse_opens_at(page),
         latitude=lat,
         longitude=lng,

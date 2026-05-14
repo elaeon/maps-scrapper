@@ -11,22 +11,22 @@ from .extractor import NAME_XP, extract_place
 from .models import Place
 from .writers import append_records, infer_format
 
-TILE_ZOOM = 14
-TILE_STEP = 0.04  # ~4.4 km at zoom 14
-DEFAULT_CENTER = (19.4326, -99.1332)  # CDMX, fallback when search URL lacks @lat,lng
-PLACES_PER_TILE_ESTIMATE = 12
-MAX_SCROLL_ITERS = 20
+TILE_ZOOM: int = 14
+TILE_STEP: float = 0.04  # ~4.4 km at zoom 14
+DEFAULT_CENTER: tuple = (19.4326, -99.1332)  # CDMX, fallback when search URL lacks @lat,lng
+PLACES_PER_TILE_ESTIMATE: int = 12
+MAX_SCROLL_ITERS: int = 20
 
-CONSENT_SELECTORS = (
+CONSENT_SELECTORS: tuple = (
     'button[aria-label="Accept all"]',
     'button[aria-label="Reject all"]',
     'form[action*="consent"] button',
     '//button[contains(text(),"Accept all")]',
     '//button[contains(text(),"I agree")]',
 )
-PLACE_LINK_XP = '//a[contains(@href, "https://www.google.com/maps/place")]'
-SEARCH_INPUT_SEL = 'input[id="searchboxinput"], input[name="q"]'
-FEED_SEL = '[role="feed"]'
+PLACE_LINK_XP: str = '//a[contains(@href, "https://www.google.com/maps/place")]'
+SEARCH_INPUT_SEL: str = 'input[id="searchboxinput"], input[name="q"]'
+FEED_SEL: str = '[role="feed"]'
 
 log = logging.getLogger(__name__)
 
@@ -138,17 +138,20 @@ def _scrape_tile_places(page: Page, urls: list[str], limit: int) -> list[Place]:
 def scrape_places(
     search_for: str,
     total: int,
-    output_path: str,
+    output_path: str | None,
     *,
     concat: bool = False,
     bbox: tuple[float, float, float, float] | None = None,
     format: str | None = None,
 ) -> int:
-    """Scrape places and persist them incrementally after each tile. Returns total saved."""
-    fmt = format or infer_format(output_path)
+    """Scrape places and persist them incrementally after each tile. Returns total saved.
+
+    When output_path is None, records are streamed as JSONL to stdout.
+    """
+    fmt = format or (infer_format(output_path) if output_path else "jsonl")
     seen_urls: set[str] = set()
     total_saved = 0
-    file_initialized = concat and os.path.isfile(output_path)
+    file_initialized = concat and output_path is not None and os.path.isfile(output_path)
     query_enc = quote_plus(search_for)
 
     with sync_playwright() as p:
