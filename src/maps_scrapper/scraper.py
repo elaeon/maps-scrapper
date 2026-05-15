@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import math
 import os
@@ -17,6 +18,14 @@ DEFAULT_CENTER: tuple = (19.4326, -99.1332)  # CDMX, fallback when search URL la
 PLACES_PER_TILE_ESTIMATE: int = 12
 MAX_SCROLL_ITERS: int = 20
 
+# Timeouts (ms)
+T_PAGE_LOAD: int = 60_000   # initial Maps load and tile navigation (heavy SPA, cold fetch)
+T_NAV: int = 30_000         # place page goto, search input ready, first feed appearance
+T_FEED: int = 15_000        # results feed on subsequent tiles (browser already warm)
+T_ELEMENT: int = 10_000     # DOM element appearance after page is loaded
+T_CONSENT: int = 2_000      # consent dialog existence probe
+T_SCROLL: int = 1_500       # max wait per scroll batch for new results
+
 CONSENT_SELECTORS: tuple = (
     'button[aria-label="Accept all"]',
     'button[aria-label="Reject all"]',
@@ -35,9 +44,8 @@ def dismiss_consent(page: Page) -> None:
     for selector in CONSENT_SELECTORS:
         try:
             btn = page.locator(selector).first
-            if btn.is_visible(timeout=2000):
+            if btn.is_visible(timeout=T_CONSENT):
                 btn.click()
-                page.wait_for_timeout(2000)
                 return
         except PlaywrightError:
             continue
@@ -46,7 +54,7 @@ def dismiss_consent(page: Page) -> None:
 def collect_feed_urls(page: Page, want: int) -> list[str]:
     try:
         panel = page.locator(FEED_SEL).first
-        panel.wait_for(timeout=10000)
+        panel.wait_for(timeout=T_ELEMENT)
         box = panel.bounding_box()
     except PlaywrightError:
         return []
@@ -57,14 +65,18 @@ def collect_feed_urls(page: Page, want: int) -> list[str]:
     cy = box["y"] + box["height"] / 2
     prev = 0
     for _ in range(MAX_SCROLL_ITERS):
-        page.mouse.move(cx, cy)
-        page.mouse.wheel(0, 10000)
-        page.wait_for_timeout(1500)
         found = page.locator(PLACE_LINK_XP).count()
         log.info(f"Currently found: {found}")
         if found >= want or found == prev:
             break
         prev = found
+        page.mouse.move(cx, cy)
+        page.mouse.wheel(0, 10000)
+        with contextlib.suppress(PlaywrightError):
+            page.wait_for_function(
+                f"document.querySelectorAll('a[href*=\"/maps/place\"]').length > {prev}",
+                timeout=T_SCROLL,
+            )
 
     links = page.locator(PLACE_LINK_XP).all()[:want]
     return [href for link in links if (href := link.get_attribute("href"))]
@@ -121,9 +133,8 @@ def _scrape_tile_places(page: Page, urls: list[str], limit: int) -> list[Place]:
         if len(out) >= limit:
             break
         try:
-            page.goto(url, timeout=30000)
-            page.wait_for_selector(NAME_XP, timeout=10000)
-            page.wait_for_timeout(1500)
+            page.goto(url, timeout=T_NAV, wait_until="domcontentloaded")
+            page.wait_for_selector(NAME_XP, timeout=T_ELEMENT)
             place = extract_place(page)
         except PlaywrightError as e:
             log.warning(f"Failed to extract {url}: {e}")
@@ -158,16 +169,14 @@ def scrape_places(
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         try:
-            page.goto("https://www.google.com/maps", timeout=60000)
-            page.wait_for_timeout(3000)
+            page.goto("https://www.google.com/maps", timeout=T_PAGE_LOAD)
             dismiss_consent(page)
 
             search_input = page.locator(SEARCH_INPUT_SEL).first
-            search_input.wait_for(timeout=30000)
+            search_input.wait_for(timeout=T_NAV)
             search_input.fill(search_for)
             page.keyboard.press("Enter")
-            page.wait_for_selector(FEED_SEL, timeout=30000)
-            page.wait_for_timeout(2000)
+            page.wait_for_selector(FEED_SEL, timeout=T_NAV)
 
             tiles = _plan_tiles(page, total, bbox)
 
@@ -181,10 +190,9 @@ def scrape_places(
                     url = (
                         f"https://www.google.com/maps/search/{query_enc}/@{lat},{lng},{TILE_ZOOM}z"
                     )
-                    page.goto(url, timeout=60000)
-                    page.wait_for_timeout(2000)
+                    page.goto(url, timeout=T_PAGE_LOAD)
                     try:
-                        page.wait_for_selector(FEED_SEL, timeout=15000)
+                        page.wait_for_selector(FEED_SEL, timeout=T_FEED)
                     except PlaywrightError:
                         log.warning(f"No results feed for tile {tile_idx + 1}, skipping")
                         continue

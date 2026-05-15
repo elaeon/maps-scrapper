@@ -35,7 +35,10 @@ _COORDS_FALLBACK_RE = re.compile(r"@(-?\d+\.\d+),(-?\d+\.\d+)")
 
 def _text(page: Page, xpath: str, timeout_ms: int = 1000) -> str:
     try:
-        return page.locator(xpath).first.inner_text(timeout=timeout_ms)
+        loc = page.locator(xpath)
+        if loc.count() == 0:
+            return ""
+        return loc.first.inner_text(timeout=timeout_ms)
     except PlaywrightError:
         return ""
 
